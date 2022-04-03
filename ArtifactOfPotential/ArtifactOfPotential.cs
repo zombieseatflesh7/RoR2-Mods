@@ -24,7 +24,7 @@ namespace ArtifactOfPotential
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "ArtifactOfPotential";
-        public const string PluginVersion = "1.2.0";
+        public const string PluginVersion = "1.2.1";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -123,19 +123,11 @@ namespace ArtifactOfPotential
             {
                 return;
             }
-            if (NetworkServer.active)
-            {
-                if (Settings.ChestsAffected.Value)
-                    On.RoR2.ChestBehavior.ItemDrop -= ChestBehavior_ItemDrop;
-                if (Settings.ShrineOfChanceAffected.Value)
-                    On.RoR2.ShrineChanceBehavior.AddShrineStack -= ShrineChanceBehavior_AddShrineStack;
-                if (Settings.BossAffected.Value)
-                    On.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
-                if (Settings.HiddenMultishopsAffected.Value || Settings.MultishopsAffected.Value || Settings.ShopsAffected.Value)
-                    On.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
-                if (Settings.SacrificeAffected.Value)
-                    On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
-            }
+            On.RoR2.ChestBehavior.ItemDrop -= ChestBehavior_ItemDrop;
+            On.RoR2.ShrineChanceBehavior.AddShrineStack -= ShrineChanceBehavior_AddShrineStack;
+            On.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
+            On.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
+            On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
         }
 
         private static void ChestBehavior_ItemDrop(On.RoR2.ChestBehavior.orig_ItemDrop orig, ChestBehavior self)
