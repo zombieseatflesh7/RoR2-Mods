@@ -19,8 +19,6 @@ namespace ArtifactOfPotential
 
     public class ArtifactOfPotential : BaseUnityPlugin
     {
-        //The Plugin GUID should be a unique ID for this plugin, which is human readable (as it is used in places like the config).
-        //If we see this PluginGUID as it is on thunderstore, we will deprecate this mod. Change the PluginAuthor and the PluginName !
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "ArtifactOfPotential";
