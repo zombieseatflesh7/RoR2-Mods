@@ -32,11 +32,8 @@ namespace ArtifactOfPotential
 
             PInfo = Info;
             InitConfig();
-            Log.LogInfo("begin loading assets");
             Assets.Init();
-            Log.LogInfo("finished. begin loading artifact");
             PotentialArtifact.Init();
-            Log.LogInfo("finished.");
         }
 
         private void InitConfig()
