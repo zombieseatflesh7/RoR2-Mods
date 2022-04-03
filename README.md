@@ -1,9 +1,4 @@
-# My first mod
+# Description
 
-Description.
+A repository for my Risk of Rain 2 mods.
 
-## Changelog
-
-**1.0.0**
-
-* Release of my first mod.
