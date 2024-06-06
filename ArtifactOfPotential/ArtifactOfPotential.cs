@@ -7,6 +7,12 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.Networking;
 using System.Collections.Generic;
+using System.Security;
+using System.Security.Permissions;
+using UnityEngine.Bindings;
+using UnityEngine.UIElements;
+
+[assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
 
 namespace ArtifactOfPotential
 {
@@ -22,7 +28,7 @@ namespace ArtifactOfPotential
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "ArtifactOfPotential";
-        public const string PluginVersion = "1.2.1";
+        public const string PluginVersion = "1.2.2";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -74,6 +80,12 @@ namespace ArtifactOfPotential
         public static Xoroshiro128Plus rng = null;
         public static PickupDropTable dropTable = null;
 
+        public enum PickupType
+        {
+            Ignore, NoDropTable, BasicDropTable, BossDropTable
+        }
+        public static PickupType nextPickup = PickupType.Ignore;
+
         public static void Init()
         {
             Potential = ScriptableObject.CreateInstance<ArtifactDef>();
@@ -100,7 +112,7 @@ namespace ArtifactOfPotential
             if (NetworkServer.active)
             {
                 if(Settings.ChestsAffected.Value)
-                    On.RoR2.ChestBehavior.ItemDrop += ChestBehavior_ItemDrop;
+                    On.RoR2.ChestBehavior.BaseItemDrop += ChestBehavior_BaseItemDrop;
                 if(Settings.ShrineOfChanceAffected.Value)
                     On.RoR2.ShrineChanceBehavior.AddShrineStack += ShrineChanceBehavior_AddShrineStack;
                 if(Settings.BossAffected.Value)
@@ -109,6 +121,9 @@ namespace ArtifactOfPotential
                     On.RoR2.ShopTerminalBehavior.DropPickup += ShopTerminalBehavior_DropPickup;
                 if(Settings.SacrificeAffected.Value)
                     On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath += SacrificeArtifactManager_OnServerCharacterDeath;
+
+                On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
+                On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3 += PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3;
             }
         }
 
@@ -118,44 +133,46 @@ namespace ArtifactOfPotential
             {
                 return;
             }
-            On.RoR2.ChestBehavior.ItemDrop -= ChestBehavior_ItemDrop;
+            On.RoR2.ChestBehavior.BaseItemDrop -= ChestBehavior_BaseItemDrop;
             On.RoR2.ShrineChanceBehavior.AddShrineStack -= ShrineChanceBehavior_AddShrineStack;
             On.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
             On.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
             On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
+            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
+            On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3 -= PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3;
         }
 
-        private static void ChestBehavior_ItemDrop(On.RoR2.ChestBehavior.orig_ItemDrop orig, ChestBehavior self)
+        private static void ChestBehavior_BaseItemDrop(On.RoR2.ChestBehavior.orig_BaseItemDrop orig, ChestBehavior self)
         {
             rng = self.GetFieldValue<Xoroshiro128Plus>("rng");
             dropTable = self.dropTable;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += CreatePickupDroplet_BasicPickupDropTable;
+            nextPickup = PickupType.BasicDropTable;
             orig(self);
             rng = null;
             dropTable = null;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= CreatePickupDroplet_BasicPickupDropTable;
+            nextPickup = PickupType.Ignore;
         }
 
         private static void ShrineChanceBehavior_AddShrineStack(On.RoR2.ShrineChanceBehavior.orig_AddShrineStack orig, ShrineChanceBehavior self, Interactor activator)
         {
             rng = self.GetFieldValue<Xoroshiro128Plus>("rng");
             dropTable = self.dropTable;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += CreatePickupDroplet_BasicPickupDropTable;
+            nextPickup = PickupType.BasicDropTable;
             orig(self, activator);
             rng = null;
             dropTable = null;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= CreatePickupDroplet_BasicPickupDropTable;
+            nextPickup = PickupType.Ignore;
         }
 
         private static void SacrificeArtifactManager_OnServerCharacterDeath(On.RoR2.Artifacts.SacrificeArtifactManager.orig_OnServerCharacterDeath orig, DamageReport damageReport)
         {
             rng = typeof(SacrificeArtifactManager).GetFieldValue<Xoroshiro128Plus>("treasureRng");
             dropTable = typeof(SacrificeArtifactManager).GetFieldValue<PickupDropTable>("dropTable");
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += CreatePickupDroplet_BasicPickupDropTable;
+            nextPickup = PickupType.BasicDropTable;
             orig(damageReport);
             rng = null;
             dropTable = null;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= CreatePickupDroplet_BasicPickupDropTable;
+            nextPickup = PickupType.Ignore;
         }
 
         private static void ShopTerminalBehavior_DropPickup(On.RoR2.ShopTerminalBehavior.orig_DropPickup orig, ShopTerminalBehavior self)
@@ -163,40 +180,144 @@ namespace ArtifactOfPotential
             if (self.serverMultiShopController != null && (Settings.MultishopsAffected.Value || (Settings.HiddenMultishopsAffected.Value && self.GetFieldValue<bool>("hidden"))))
             {
                 rng = self.serverMultiShopController.GetFieldValue<Xoroshiro128Plus>("rng");
-                On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += CreatePickupDroplet_NoDropTable;
+                nextPickup = PickupType.NoDropTable;
                 orig(self);
                 rng = null;
-                On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= CreatePickupDroplet_NoDropTable;
+                nextPickup = PickupType.Ignore;
                 return;
             }
             if (self.serverMultiShopController == null && Settings.ShopsAffected.Value)
             {
                 rng = self.GetFieldValue<Xoroshiro128Plus>("rng");
                 dropTable = self.dropTable;
-                On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += CreatePickupDroplet_BasicPickupDropTable;
+                nextPickup = PickupType.BasicDropTable;
                 orig(self);
                 rng = null;
                 dropTable = null;
-                On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= CreatePickupDroplet_BasicPickupDropTable;
+                nextPickup = PickupType.Ignore;
                 return;
             }
             orig(self);
         }
-
-        private static void CreatePickupDroplet_BasicPickupDropTable(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_PickupIndex_Vector3_Vector3 orig, PickupIndex pickupIndex, Vector3 position, Vector3 velocity)
+        
+        private static void BossGroup_DropRewards(On.RoR2.BossGroup.orig_DropRewards orig, BossGroup self)
         {
-            if(dropTable == null)
+            rng = self.GetFieldValue<Xoroshiro128Plus>("rng");
+            nextPickup = PickupType.BossDropTable;
+            orig(self);
+            rng = null;
+            nextPickup = PickupType.Ignore;
+            for (int i = 0; i < bossDropsByTier.Length; i++)
             {
-                Log.LogInfo("The droptable is null! This is because the hook was not removed when it should have been! This is an error!");
+                bossDropsByTier[i] = null;
+            }
+        }
+
+        public static PickupIndex[][] bossDropsByTier = new PickupIndex[10][];
+
+        private static void PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_PickupIndex_Vector3_Vector3 orig, PickupIndex pickupIndex, Vector3 position, Vector3 velocity)
+        {
+            switch (nextPickup)
+            {
+                case PickupType.Ignore:
+                    orig(pickupIndex, position, velocity);
+                    break;
+                case PickupType.NoDropTable:
+                    nextPickup = PickupType.Ignore;
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_NoDropTable(pickupIndex, position), velocity);
+                    break;
+                case PickupType.BasicDropTable:
+                    nextPickup = PickupType.Ignore;
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BasicPickupDropTable(pickupIndex, position), velocity);
+                    break;
+                case PickupType.BossDropTable:
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BossDropTable(pickupIndex, position), velocity);
+                    break;
+            }
+        }
+
+        private static void PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 velocity)
+        {
+            if (pickupInfo.pickerOptions != null && pickupInfo.pickerOptions.Length > 0)
+            {
+                orig(pickupInfo, velocity);
+                return;
+            }
+
+            GenericPickupController.CreatePickupInfo newPickupInfo;
+            switch (nextPickup)
+            {
+                case PickupType.NoDropTable:
+                    nextPickup = PickupType.Ignore;
+                    newPickupInfo = CreatePickupInfo_NoDropTable(pickupInfo.pickupIndex, pickupInfo.position);
+                    newPickupInfo.chest = pickupInfo.chest;
+                    newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
+                    pickupInfo = newPickupInfo;
+                    break;
+                case PickupType.BasicDropTable:
+                    nextPickup = PickupType.Ignore;
+                    newPickupInfo = CreatePickupInfo_BasicPickupDropTable(pickupInfo.pickupIndex, pickupInfo.position);
+                    newPickupInfo.chest = pickupInfo.chest;
+                    newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
+                    pickupInfo = newPickupInfo;
+                    break;
+            }
+            orig(pickupInfo, velocity);
+        }
+
+        private static GenericPickupController.CreatePickupInfo CreatePickupInfo_NoDropTable(PickupIndex pickupIndex, Vector3 position)
+        {
+            Log.LogInfo("Creating pickup without drop table");
+
+            GenericPickupController.CreatePickupInfo pickupInfo = new GenericPickupController.CreatePickupInfo
+            {
+                position = position,
+                rotation = Quaternion.identity,
+                pickupIndex = pickupIndex
+            };
+
+            int tier = GetTier(pickupIndex);
+            PickupIndex[] choices = null;
+            PickupIndex[] choices2 = null;
+
+            choices2 = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
+            int num = choices2.Length;
+            if (num == 0)
+                return pickupInfo;
+
+            choices = new PickupIndex[num + 1];
+
+            choices[0] = pickupIndex;
+            for (int i = 0; i < num; i++)
+                choices[i + 1] = choices2[i];
+
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
+            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            return pickupInfo;
+        }
+
+        private static GenericPickupController.CreatePickupInfo CreatePickupInfo_BasicPickupDropTable(PickupIndex pickupIndex, Vector3 position)
+        {
+            Log.LogInfo("Creating pickup from basic drop table");
+
+            GenericPickupController.CreatePickupInfo pickupInfo = new GenericPickupController.CreatePickupInfo
+            {
+                position = position,
+                rotation = Quaternion.identity,
+                pickupIndex = pickupIndex
+            };
+
+            if (dropTable == null)
+            {
+                Log.LogInfo("The droptable is null! This is usually the result of an error.");
                 rng = null;
-                On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= CreatePickupDroplet_BasicPickupDropTable;
-                orig(pickupIndex, position, velocity);
+                return pickupInfo;
             }
             int tier = GetTier(pickupIndex);
             PickupIndex[] choices = null;
             PickupIndex[] choices2 = null;
             int num = 0;
-            if ( (Settings.AnyTierMode.Value && tier <= 6 ) || (Settings.AnyTierModeVoid.Value && tier >= 7) ) //Any Tier Mode or Any Tier Mode Viod is true
+            if ((Settings.AnyTierMode.Value && tier <= 6) || (Settings.AnyTierModeVoid.Value && tier >= 7)) //Any Tier Mode or Any Tier Mode Viod is true
             {
                 WeightedSelection<PickupIndex> selection = ((BasicPickupDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
                 for (int i = 0; i < selection.Count; i++)
@@ -210,8 +331,7 @@ namespace ArtifactOfPotential
                 num = Mathf.Min((tier <= 6) ? (Settings.AnyTierModeChoiceCount.Value - 1) : (Settings.AnyTierModeVoidChoiceCount.Value - 1), selection.Count);
                 if (num == 0)
                 {
-                    orig(pickupIndex, position, velocity);
-                    return;
+                    return pickupInfo;
                 }
                 choices = new PickupIndex[num + 1];
                 choices2 = dropTable.GenerateUniqueDrops(num, rng);
@@ -222,8 +342,7 @@ namespace ArtifactOfPotential
                 num = choices2.Length;
                 if (num == 0)
                 {
-                    orig(pickupIndex, position, velocity);
-                    return;
+                    return pickupInfo;
                 }
                 choices = new PickupIndex[num + 1];
             }
@@ -242,8 +361,7 @@ namespace ArtifactOfPotential
                 num = Mathf.Min(Settings.GetChoiceCountByTier(tier) - 1, selection.Count);
                 if (num == 0)
                 {
-                    orig(pickupIndex, position, velocity);
-                    return;
+                    return pickupInfo;
                 }
                 choices = new PickupIndex[num + 1];
                 choices2 = dropTable.GenerateUniqueDrops(num, rng);
@@ -256,34 +374,22 @@ namespace ArtifactOfPotential
             {
                 choices[i + 1] = choices2[i];
             }
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
+            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            return pickupInfo;
+        }
+
+        private static GenericPickupController.CreatePickupInfo CreatePickupInfo_BossDropTable(PickupIndex pickupIndex, Vector3 position)
+        {
+            Log.LogInfo("Creating pickup from boss drop table");
+
             GenericPickupController.CreatePickupInfo pickupInfo = new GenericPickupController.CreatePickupInfo
             {
-                pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices),
                 position = position,
                 rotation = Quaternion.identity,
-                prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab,
                 pickupIndex = pickupIndex
             };
-            PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
-        }
 
-        private static void BossGroup_DropRewards(On.RoR2.BossGroup.orig_DropRewards orig, BossGroup self)
-        {
-            rng = self.GetFieldValue<Xoroshiro128Plus>("rng");
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += CreatePickupDroplet_BossDropTable;
-            orig(self);
-            rng = null;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= CreatePickupDroplet_BossDropTable;
-            for(int i = 0; i < bossDropsByTier.Length; i++)
-            {
-                bossDropsByTier[i] = null;
-            }
-        }
-
-        public static PickupIndex[][] bossDropsByTier = new PickupIndex[10][];
-
-        private static void CreatePickupDroplet_BossDropTable(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_PickupIndex_Vector3_Vector3 orig, PickupIndex pickupIndex, Vector3 position, Vector3 velocity)
-        {
             int tier = GetTier(pickupIndex);
             PickupIndex[] choices = null;
             int num = 0;
@@ -293,8 +399,7 @@ namespace ArtifactOfPotential
                 PickupIndex[] bossDropsLunar = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
                 if (bossDropsLunar == null || bossDropsLunar.Length == 0)
                 {
-                    orig(pickupIndex, position, velocity);
-                    return;
+                    return pickupInfo;
                 }
                 num = bossDropsLunar.Length;
                 choices = new PickupIndex[num + 1];
@@ -310,10 +415,9 @@ namespace ArtifactOfPotential
                 {
                     bossDropsByTier[tier - 1] = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
                 }
-                if (bossDropsByTier[tier - 1] == null || bossDropsByTier[tier - 1].Length == 0)
+                if (bossDropsByTier[tier - 1].Length == 0)
                 {
-                    orig(pickupIndex, position, velocity);
-                    return;
+                    return pickupInfo;
                 }
                 num = bossDropsByTier[tier - 1].Length;
                 choices = new PickupIndex[num + 1];
@@ -362,47 +466,10 @@ namespace ArtifactOfPotential
                     choices[i + 1] = bossDropsBoss[i];
                 }
             }*/
-            
-            GenericPickupController.CreatePickupInfo pickupInfo = new GenericPickupController.CreatePickupInfo
-            {
-                pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices),
-                position = position,
-                rotation = Quaternion.identity,
-                prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab,
-                pickupIndex = pickupIndex
-            };
-            PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
-        }
 
-        private static void CreatePickupDroplet_NoDropTable(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_PickupIndex_Vector3_Vector3 orig, PickupIndex pickupIndex, Vector3 position, Vector3 velocity)
-        {
-            int tier = GetTier(pickupIndex);
-            PickupIndex[] choices = null;
-            PickupIndex[] choices2 = null;
-
-            choices2 = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
-            int num = choices2.Length;
-            if (num == 0)
-            {
-                orig(pickupIndex, position, velocity);
-                return;
-            }
-            choices = new PickupIndex[num + 1];
-
-            choices[0] = pickupIndex;
-            for (int i = 0; i < num; i++)
-            {
-                choices[i + 1] = choices2[i];
-            }
-            GenericPickupController.CreatePickupInfo pickupInfo = new GenericPickupController.CreatePickupInfo
-            {
-                pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices),
-                position = position,
-                rotation = Quaternion.identity,
-                prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab,
-                pickupIndex = pickupIndex
-            };
-            PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
+            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            return pickupInfo;
         }
 
         private static int GetTier(PickupIndex pickupIndex)
@@ -435,6 +502,7 @@ namespace ArtifactOfPotential
                     return 4;
             }
         }
+
         private static PickupIndex[] GetUniqueItemsOfSameTier(int num, PickupIndex pickupIndex, Xoroshiro128Plus rng)
         {
             List<PickupIndex> list = null;

@@ -17,6 +17,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DynamicBarrierDecay", "Dyna
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LysateBeacons", "LysateBeacons\LysateBeacons.csproj", "{D2FC241A-C52F-4393-8CCC-9665E0AD0C99}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ColorfulChaoticSpite", "ColorfulChaoticSpite\ColorfulChaoticSpite.csproj", "{C8E4322D-11AB-46EB-A31A-A73DB30A40B2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{D2FC241A-C52F-4393-8CCC-9665E0AD0C99}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2FC241A-C52F-4393-8CCC-9665E0AD0C99}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2FC241A-C52F-4393-8CCC-9665E0AD0C99}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8E4322D-11AB-46EB-A31A-A73DB30A40B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8E4322D-11AB-46EB-A31A-A73DB30A40B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8E4322D-11AB-46EB-A31A-A73DB30A40B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8E4322D-11AB-46EB-A31A-A73DB30A40B2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
