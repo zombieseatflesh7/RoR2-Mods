@@ -38,7 +38,7 @@ namespace ArtifactOfPotential
 
             PInfo = Info;
             InitConfig();
-            Assets.Init();
+            Asset.Init();
             PotentialArtifact.Init();
         }
 
@@ -92,8 +92,8 @@ namespace ArtifactOfPotential
             Potential.cachedName = "ArtifactOfPotential";
             Potential.nameToken = "Artifact of Potential";
             Potential.descriptionToken = "Most items become Void Potentials.";
-            Potential.smallIconSelectedSprite = Assets.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialEnabled.png");
-            Potential.smallIconDeselectedSprite = Assets.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialDisabled.png");
+            Potential.smallIconSelectedSprite = Asset.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialEnabled.png");
+            Potential.smallIconDeselectedSprite = Asset.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialDisabled.png");
             ContentAddition.AddArtifactDef(Potential);
 
             voidPotentialPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/DLC1/OptionPickup/OptionPickup.prefab").WaitForCompletion();
