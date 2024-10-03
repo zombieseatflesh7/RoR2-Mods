@@ -123,7 +123,8 @@ namespace ArtifactOfPotential
                     On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath += SacrificeArtifactManager_OnServerCharacterDeath;
 
                 On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
-                On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3 += PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3;
+                On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 += PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3;
+                On.RoR2.GenericPickupController.CreatePickup += GenericPickupController_CreatePickup;
             }
         }
 
@@ -139,7 +140,44 @@ namespace ArtifactOfPotential
             On.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
             On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
             On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3 -= PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3;
+            On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 -= PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3;
+            On.RoR2.GenericPickupController.CreatePickup -= GenericPickupController_CreatePickup;
+        }
+
+        private static GenericPickupController GenericPickupController_CreatePickup(On.RoR2.GenericPickupController.orig_CreatePickup orig, ref GenericPickupController.CreatePickupInfo createPickupInfo)
+        {
+            if (createPickupInfo.prefabOverride == commandCubePrefab)
+            {
+                //This is a bit hacky but it's the only way I could find to make artifact prefab to work.
+                //Basically cutting out a portion of the decompiled code to make it work.
+                //Looking for mesh renderer child that doesn't exist in commandcube.prefab - Valkarin
+                Log.LogDebug("Prefab Overrid is CommandCube");
+                GameObject gameObject = Object.Instantiate(createPickupInfo.prefabOverride ?? GenericPickupController.pickupPrefab, createPickupInfo.position, createPickupInfo.rotation);
+                GenericPickupController component = gameObject.GetComponent<GenericPickupController>();
+                if ((bool)component)
+                {
+                    component.NetworkpickupIndex = createPickupInfo.pickupIndex;
+                    component.chestGeneratedFrom = createPickupInfo.chest;
+                }
+                PickupIndexNetworker component2 = gameObject.GetComponent<PickupIndexNetworker>();
+                if ((bool)component2)
+                {
+                    component2.NetworkpickupIndex = createPickupInfo.pickupIndex;
+                }
+                PickupPickerController component3 = gameObject.GetComponent<PickupPickerController>();
+                if ((bool)component3 && createPickupInfo.pickerOptions != null)
+                {
+                    component3.SetOptionsServer(createPickupInfo.pickerOptions);
+                }
+                NetworkServer.Spawn(gameObject);
+                return component;
+            }
+            else
+            {
+                orig(ref createPickupInfo);
+            }
+            return null;
+
         }
 
         private static void ChestBehavior_BaseItemDrop(On.RoR2.ChestBehavior.orig_BaseItemDrop orig, ChestBehavior self)
@@ -224,23 +262,23 @@ namespace ArtifactOfPotential
                     break;
                 case PickupType.NoDropTable:
                     nextPickup = PickupType.Ignore;
-                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_NoDropTable(pickupIndex, position), velocity);
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_NoDropTable(pickupIndex, position), position, velocity);
                     break;
                 case PickupType.BasicDropTable:
                     nextPickup = PickupType.Ignore;
-                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BasicPickupDropTable(pickupIndex, position), velocity);
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BasicPickupDropTable(pickupIndex, position), position, velocity);
                     break;
                 case PickupType.BossDropTable:
-                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BossDropTable(pickupIndex, position), velocity);
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BossDropTable(pickupIndex, position), position, velocity);
                     break;
             }
         }
 
-        private static void PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 velocity)
+        private static void PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 position, Vector3 velocity)
         {
             if (pickupInfo.pickerOptions != null && pickupInfo.pickerOptions.Length > 0)
             {
-                orig(pickupInfo, velocity);
+                orig(pickupInfo, position, velocity);
                 return;
             }
 
@@ -262,7 +300,7 @@ namespace ArtifactOfPotential
                     pickupInfo = newPickupInfo;
                     break;
             }
-            orig(pickupInfo, velocity);
+            orig(pickupInfo, position, velocity);
         }
 
         private static GenericPickupController.CreatePickupInfo CreatePickupInfo_NoDropTable(PickupIndex pickupIndex, Vector3 position)
@@ -293,6 +331,17 @@ namespace ArtifactOfPotential
 
             pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
             pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            //Sets the pickupIndex to the Tier. This is how it is done in the Void Field area. - Valkarin
+            if (choices.Length <= 3 && PickupCatalog.itemTierToPickupIndex.TryGetValue(PickupCatalog.GetPickupDef(pickupIndex).itemTier, out var value))
+            {
+                Log.LogInfo("Item Tier to Pickup Idex: " + value);
+                pickupInfo.pickupIndex = value;
+            }
+            else if (tier == 4)
+            {
+                //Couldn't get equipment to use the pickupOption prefab - Valkarin
+                pickupInfo.prefabOverride = commandCubePrefab;
+            }
             return pickupInfo;
         }
 
@@ -376,6 +425,16 @@ namespace ArtifactOfPotential
             }
             pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
             pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            //see line 334
+            if (choices.Length <= 3 && PickupCatalog.itemTierToPickupIndex.TryGetValue(PickupCatalog.GetPickupDef(pickupIndex).itemTier, out var value))
+            {
+                Log.LogInfo("Item Tier to Pickup Idex: " + value);
+                pickupInfo.pickupIndex = value;
+            } 
+            else if (tier == 4)
+            {
+                pickupInfo.prefabOverride = commandCubePrefab;
+            }
             return pickupInfo;
         }
 
@@ -469,6 +528,16 @@ namespace ArtifactOfPotential
 
             pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
             pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            //see line 334
+            if (choices.Length <= 3 && PickupCatalog.itemTierToPickupIndex.TryGetValue(PickupCatalog.GetPickupDef(pickupIndex).itemTier, out var value))
+            {
+                Log.LogInfo("Item Tier to Pickup Idex: " + value);
+                pickupInfo.pickupIndex = value;
+            }
+            else if (tier == 4)
+            {
+                pickupInfo.prefabOverride = commandCubePrefab;
+            }
             return pickupInfo;
         }
 
