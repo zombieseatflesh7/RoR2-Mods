@@ -62,10 +62,6 @@
       <HintPath>libs\ProBuilderMeshOps.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="R2API">
-      <HintPath>libs\R2API.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="Rewired_Windows_Lib">
       <HintPath>libs\Rewired_Windows_Lib.dll</HintPath>
       <Private>false</Private>
