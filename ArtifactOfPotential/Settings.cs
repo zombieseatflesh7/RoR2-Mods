@@ -23,6 +23,7 @@ namespace ArtifactOfPotential
         public static ConfigEntry<bool> BossAffected;
         public static ConfigEntry<bool> SacrificeAffected;
         public static ConfigEntry<bool> DoppelgangersAffected;
+        public static ConfigEntry<bool> SonorousWhispersAffected;
 
         //Boss
 

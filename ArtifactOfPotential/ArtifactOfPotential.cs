@@ -57,6 +57,7 @@ namespace ArtifactOfPotential
             Settings.ShopsAffected = Config.Bind<bool>("Item Sources Affected", "Shops", false, "Whether or not shops should drop void potentials. This includes: The bazaar shop, printers, and cauldrons. This setting will change in the future.");
             Settings.BossAffected = Config.Bind<bool>("Item Sources Affected", "Boss", true, "Whether or not bosses should drop void potentials. This includes: the teleporter event, Alloy Worship Unit, Aurelionite, and any other \"boss\" event.");
             Settings.SacrificeAffected = Config.Bind<bool>("Item Sources Affected", "Artifact of Sacrifice", true, "Whether or not Artifact of Sacrifice should drop void potentials.");
+            Settings.SonorousWhispersAffected = Config.Bind<bool>("Item Sources Affected", "Sonorous Whispers", true, "Whether or not Sonorous Whispers should drop void potentials.");
 
             Settings.Tier1ChoiceCount = Config.Bind<int>("Number of Options by Tier", "Common Options", 3, "The number of choices you get from common tier void potentials. Set to 1 to disable void potentials for this tier.");
             Settings.Tier2ChoiceCount = Config.Bind<int>("Number of Options by Tier", "Uncommon Options", 3, "The number of choices you get from uncommon tier void potentials. Set to 1 to disable void potentials for this tier.");
@@ -121,10 +122,12 @@ namespace ArtifactOfPotential
                     On.RoR2.ShopTerminalBehavior.DropPickup += ShopTerminalBehavior_DropPickup;
                 if(Settings.SacrificeAffected.Value)
                     On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath += SacrificeArtifactManager_OnServerCharacterDeath;
+                if (Settings.SonorousWhispersAffected.Value)
+                    On.RoR2.GlobalEventManager.OnCharacterDeath += GlobalEventManager_OnCharacterDeath;
 
+                On.RoR2.GenericPickupController.CreatePickup += GenericPickupController_CreatePickup;
                 On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
                 On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 += PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3;
-                On.RoR2.GenericPickupController.CreatePickup += GenericPickupController_CreatePickup;
             }
         }
 
@@ -139,9 +142,10 @@ namespace ArtifactOfPotential
             On.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
             On.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
             On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
+            On.RoR2.GlobalEventManager.OnCharacterDeath -= GlobalEventManager_OnCharacterDeath;
+            On.RoR2.GenericPickupController.CreatePickup -= GenericPickupController_CreatePickup;
             On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
             On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 -= PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3;
-            On.RoR2.GenericPickupController.CreatePickup -= GenericPickupController_CreatePickup;
         }
 
         private static GenericPickupController GenericPickupController_CreatePickup(On.RoR2.GenericPickupController.orig_CreatePickup orig, ref GenericPickupController.CreatePickupInfo createPickupInfo)
@@ -251,6 +255,22 @@ namespace ArtifactOfPotential
             }
         }
 
+        //Sonorous Whispers
+        private static void GlobalEventManager_OnCharacterDeath(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, GlobalEventManager self, DamageReport damageReport)
+        {
+            if (damageReport.attackerMaster.inventory.GetItemCount(DLC2Content.Items.ResetChests) > 0) 
+            {
+                //Have to make a new rng for this
+                rng = new Xoroshiro128Plus(Run.instance.treasureRng.nextUlong);
+                dropTable = GlobalEventManager.CommonAssets.dtSonorousEchoPath;
+                nextPickup = PickupType.BasicDropTable;
+            }
+            orig(self, damageReport);
+            rng = null;
+            dropTable = null;
+            nextPickup = PickupType.Ignore;
+        }
+
         public static PickupIndex[][] bossDropsByTier = new PickupIndex[10][];
 
         private static void PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_PickupIndex_Vector3_Vector3 orig, PickupIndex pickupIndex, Vector3 position, Vector3 velocity)
@@ -286,14 +306,14 @@ namespace ArtifactOfPotential
             switch (nextPickup)
             {
                 case PickupType.NoDropTable:
-                    nextPickup = PickupType.Ignore;
+                    //nextPickup = PickupType.Ignore;
                     newPickupInfo = CreatePickupInfo_NoDropTable(pickupInfo.pickupIndex, pickupInfo.position);
                     newPickupInfo.chest = pickupInfo.chest;
                     newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
                     pickupInfo = newPickupInfo;
                     break;
                 case PickupType.BasicDropTable:
-                    nextPickup = PickupType.Ignore;
+                    //nextPickup = PickupType.Ignore;
                     newPickupInfo = CreatePickupInfo_BasicPickupDropTable(pickupInfo.pickupIndex, pickupInfo.position);
                     newPickupInfo.chest = pickupInfo.chest;
                     newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
@@ -334,7 +354,7 @@ namespace ArtifactOfPotential
             //Sets the pickupIndex to the Tier. This is how it is done in the Void Field area. - Valkarin
             if (choices.Length <= 3 && PickupCatalog.itemTierToPickupIndex.TryGetValue(PickupCatalog.GetPickupDef(pickupIndex).itemTier, out var value))
             {
-                Log.LogInfo("Item Tier to Pickup Idex: " + value);
+                Log.LogDebug("Item Tier to Pickup Idex: " + value);
                 pickupInfo.pickupIndex = value;
             }
             else if (tier == 4)
@@ -425,10 +445,9 @@ namespace ArtifactOfPotential
             }
             pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
             pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
-            //see line 334
             if (choices.Length <= 3 && PickupCatalog.itemTierToPickupIndex.TryGetValue(PickupCatalog.GetPickupDef(pickupIndex).itemTier, out var value))
             {
-                Log.LogInfo("Item Tier to Pickup Idex: " + value);
+                Log.LogDebug("Item Tier to Pickup Idex: " + value);
                 pickupInfo.pickupIndex = value;
             } 
             else if (tier == 4)
@@ -528,10 +547,9 @@ namespace ArtifactOfPotential
 
             pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
             pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
-            //see line 334
             if (choices.Length <= 3 && PickupCatalog.itemTierToPickupIndex.TryGetValue(PickupCatalog.GetPickupDef(pickupIndex).itemTier, out var value))
             {
-                Log.LogInfo("Item Tier to Pickup Idex: " + value);
+                Log.LogDebug("Item Tier to Pickup Idex: " + value);
                 pickupInfo.pickupIndex = value;
             }
             else if (tier == 4)
