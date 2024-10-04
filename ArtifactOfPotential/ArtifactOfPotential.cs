@@ -152,7 +152,7 @@ namespace ArtifactOfPotential
         {
             if (createPickupInfo.prefabOverride == commandCubePrefab)
             {
-                //This is a bit hacky but it's the only way I could find to make artifact prefab to work.
+                //This is a bit hacky but it's the only way I could find to make artifact of command prefab to work.
                 //Basically cutting out a portion of the decompiled code to make it work.
                 //Looking for mesh renderer child that doesn't exist in commandcube.prefab - Valkarin
                 Log.LogDebug("Prefab Overrid is CommandCube");
@@ -258,6 +258,7 @@ namespace ArtifactOfPotential
         //Sonorous Whispers
         private static void GlobalEventManager_OnCharacterDeath(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, GlobalEventManager self, DamageReport damageReport)
         {
+            if (damageReport.attackerMaster == null) { orig(self, damageReport); return; }
             if (damageReport.attackerMaster.inventory.GetItemCount(DLC2Content.Items.ResetChests) > 0) 
             {
                 //Have to make a new rng for this
