@@ -170,6 +170,35 @@ namespace ArtifactOfPotential
             }
 
             orig(self, modelObjectOverride);
+            
+            if (currentModelObjectOverride != null)
+            {
+
+                if ((bool)self.tier1ParticleEffect)
+                {
+                    self.tier1ParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.tier2ParticleEffect)
+                {
+                    self.tier2ParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.tier3ParticleEffect)
+                {
+                    self.tier3ParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.equipmentParticleEffect)
+                {
+                    self.equipmentParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.lunarParticleEffect)
+                {
+                    self.lunarParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.voidParticleEffect)
+                {
+                    self.voidParticleEffect.SetActive(value: false);
+                }
+            }
         }
 
         private static GenericPickupController GenericPickupController_CreatePickup(On.RoR2.GenericPickupController.orig_CreatePickup orig, ref GenericPickupController.CreatePickupInfo createPickupInfo)
