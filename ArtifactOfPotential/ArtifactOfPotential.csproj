@@ -79,8 +79,4 @@
     </Reference>
   </ItemGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /Y &quot;$(OutDir)\ArtifactOfPotential.dll&quot; &quot;C:\Users\lucer\AppData\Roaming\r2modmanPlus-local\RiskOfRain2\profiles\Modding\BepInEx\plugins\ArtifactofPotentialMyEdit\ArtifactOfPotential.dll&quot;&#xD;&#xA;copy /Y &quot;$(OutDir)\ArtifactOfPotential.pdb&quot; &quot;C:\Users\lucer\AppData\Roaming\r2modmanPlus-local\RiskOfRain2\profiles\Modding\BepInEx\plugins\ArtifactofPotentialMyEdit\ArtifactOfPotential.pdb&quot;" />
-  </Target>
-
 </Project>
