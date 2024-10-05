@@ -12,6 +12,8 @@ namespace ArtifactOfPotential
         public static ConfigEntry<int> AnyTierModeChoiceCount;
         public static ConfigEntry<bool> AnyTierModeVoid;
         public static ConfigEntry<int> AnyTierModeVoidChoiceCount;
+        public static ConfigEntry<bool> AnyTierModeDoppelganger;
+        public static ConfigEntry<int> AnyTierModeDoppelgangerCount;
 
         //Item Sources Affected
         public static ConfigEntry<bool> ChestsAffected;

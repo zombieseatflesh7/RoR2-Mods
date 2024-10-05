@@ -48,6 +48,8 @@ namespace ArtifactOfPotential
             Settings.AnyTierModeChoiceCount = Config.Bind<int>("Any Tier Mode", "Any Tier Mode - Choice Count", 3, "The number of choices you get from void potentials when \"Any Tier Mode\" is enabled. Does not affect void items.");
             Settings.AnyTierModeVoid = Config.Bind<bool>("Any Tier Mode", "Any Tier Mode - Void", true, "Similar to Any Tier Mode, but only affects void items.");
             Settings.AnyTierModeVoidChoiceCount = Config.Bind<int>("Any Tier Mode", "Any Tier Mode - Void - Choice Count", 3, "The number of choices you get from void tier void potentials when \"Any Tier Mode - Void\" is enabled. Only affects void items.");
+            Settings.AnyTierModeDoppelganger = Config.Bind<bool>("Any Tier Mode", "Any Tier Mode - Artifact of Vengance", false, "Similar to Any Tier Mode, but only affects Artifact of Vengance. Any Tier Mode Void will still take affect if this is false");
+            Settings.AnyTierModeDoppelgangerCount = Config.Bind<int>("Any Tier Mode", "Any Tier Mode - Artifact of Vengance - Choice Count", 3, "The number of choices you get from your doppelganger when \"Any Tier Mode - Artifact of Vengance\" is enabled.");
 
             Settings.ChestsAffected = Config.Bind<bool>("Item Sources Affected", "Chests", true, "Whether or not chests should drop void potentials.");
             Settings.ShrineOfChanceAffected = Config.Bind<bool>("Item Sources Affected", "Shrines of chance", true, "Whether or not shrines of chance should drop void potentials.");
@@ -57,6 +59,7 @@ namespace ArtifactOfPotential
             Settings.ShopsAffected = Config.Bind<bool>("Item Sources Affected", "Shops", false, "Whether or not shops should drop void potentials. This includes: The bazaar shop, printers, and cauldrons. This setting will change in the future.");
             Settings.BossAffected = Config.Bind<bool>("Item Sources Affected", "Boss", true, "Whether or not bosses should drop void potentials. This includes: the teleporter event, Alloy Worship Unit, Aurelionite, and any other \"boss\" event.");
             Settings.SacrificeAffected = Config.Bind<bool>("Item Sources Affected", "Artifact of Sacrifice", true, "Whether or not Artifact of Sacrifice should drop void potentials.");
+            Settings.DoppelgangersAffected = Config.Bind<bool>("Item Sources Affected", "Artifact of Vengance", true, "Whether or not Artifact of Vengance should void potentials.");
             Settings.SonorousWhispersAffected = Config.Bind<bool>("Item Sources Affected", "Sonorous Whispers", true, "Whether or not Sonorous Whispers should drop void potentials.");
 
             Settings.Tier1ChoiceCount = Config.Bind<int>("Number of Options by Tier", "Common Options", 3, "The number of choices you get from common tier void potentials. Set to 1 to disable void potentials for this tier.");
@@ -81,11 +84,10 @@ namespace ArtifactOfPotential
         public static Xoroshiro128Plus rng = null;
         public static PickupDropTable dropTable = null;
         public static GameObject currentModelObjectOverride = null;
-        public static bool useCommandCube = false;
 
         public enum PickupType
         {
-            Ignore, NoDropTable, BasicDropTable, BossDropTable
+            Ignore, NoDropTable, BasicDropTable, BossDropTable, DoppelgangerDropTable
         }
         public static PickupType nextPickup = PickupType.Ignore;
 
@@ -124,6 +126,8 @@ namespace ArtifactOfPotential
                     On.RoR2.ShopTerminalBehavior.DropPickup += ShopTerminalBehavior_DropPickup;
                 if (Settings.SacrificeAffected.Value)
                     On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath += SacrificeArtifactManager_OnServerCharacterDeath;
+                if (Settings.DoppelgangersAffected.Value)
+                    On.RoR2.Artifacts.DoppelgangerInvasionManager.OnCharacterDeathGlobal += DoppelgangerInvasionManager_OnCharacterDeathGlobal;
                 if (Settings.SonorousWhispersAffected.Value)
                     On.RoR2.GlobalEventManager.OnCharacterDeath += GlobalEventManager_OnCharacterDeath;
 
@@ -146,6 +150,7 @@ namespace ArtifactOfPotential
             On.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
             On.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
             On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
+            On.RoR2.Artifacts.DoppelgangerInvasionManager.OnCharacterDeathGlobal -= DoppelgangerInvasionManager_OnCharacterDeathGlobal;
             On.RoR2.GlobalEventManager.OnCharacterDeath -= GlobalEventManager_OnCharacterDeath;
             On.RoR2.PickupDisplay.RebuildModel -= PickupDisplay_RebuildModel;
             On.RoR2.GenericPickupController.CreatePickup -= GenericPickupController_CreatePickup;
@@ -282,6 +287,20 @@ namespace ArtifactOfPotential
             }
         }
 
+        private static void DoppelgangerInvasionManager_OnCharacterDeathGlobal(On.RoR2.Artifacts.DoppelgangerInvasionManager.orig_OnCharacterDeathGlobal orig, DoppelgangerInvasionManager self, DamageReport damageReport)
+        {
+            //rng = typeof(DoppelgangerInvasionManager).GetFieldValue<Xoroshiro128Plus>("treasureRng");
+            //dropTable = typeof(DoppelgangerInvasionManager).GetFieldValue<PickupDropTable>("dropTable");
+            rng = self.treasureRng;
+            dropTable = self.dropTable;
+            nextPickup = PickupType.DoppelgangerDropTable;
+            orig(self, damageReport);
+            rng = null;
+            nextPickup = PickupType.Ignore;
+            dropTable = null;
+            currentModelObjectOverride = null;
+        }
+
         //Sonorous Whispers
         private static void GlobalEventManager_OnCharacterDeath(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, GlobalEventManager self, DamageReport damageReport)
         {
@@ -319,6 +338,9 @@ namespace ArtifactOfPotential
                     break;
                 case PickupType.BossDropTable:
                     PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BossDropTable(pickupIndex, position), position, velocity);
+                    break;
+                case PickupType.DoppelgangerDropTable:
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_DoppelGangerDropTable(pickupIndex, position), position, velocity);
                     break;
             }
         }
@@ -558,6 +580,79 @@ namespace ArtifactOfPotential
                 }
             }*/
 
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
+            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            return pickupInfo;
+        }
+
+        private static GenericPickupController.CreatePickupInfo CreatePickupInfo_DoppelGangerDropTable(PickupIndex pickupIndex, Vector3 position)
+        {
+            Log.LogInfo("Creating pickup from doppelganger drop table");
+
+            GenericPickupController.CreatePickupInfo pickupInfo = new GenericPickupController.CreatePickupInfo
+            {
+                position = position,
+                rotation = Quaternion.identity,
+                pickupIndex = pickupIndex
+            };
+
+            if (dropTable == null)
+            {
+                Log.LogInfo("The droptable is null! This is usually the result of an error.");
+                rng = null;
+                return pickupInfo;
+            }
+            int tier = GetTier(pickupIndex);
+            PickupIndex[] choices = null;
+            PickupIndex[] choices2 = null;
+            int num = 0;
+            if ((Settings.AnyTierMode.Value && tier <= 6) || (Settings.AnyTierModeVoid.Value && tier >= 7) || (Settings.AnyTierModeDoppelganger.Value && tier <= 6)) //Any Tier Mode or Any Tier Mode Viod is true
+            {
+                WeightedSelection<PickupIndex> selection = ((DoppelgangerDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
+                for (int i = 0; i < selection.Count; i++)
+                {
+                    if (selection.GetChoice(i).value == pickupIndex)
+                    {
+                        selection.RemoveChoice(i);
+                        i--;
+                    }
+                }
+                num = Mathf.Min((tier <= 6) ? Settings.AnyTierMode.Value ? (Settings.AnyTierModeChoiceCount.Value - 1) : (Settings.AnyTierModeDoppelgangerCount.Value -1 ) : (Settings.AnyTierModeVoidChoiceCount.Value - 1), selection.Count);
+                if (num == 0)
+                {
+                    return pickupInfo;
+                }
+                choices = new PickupIndex[num + 1];
+                choices2 = dropTable.GenerateUniqueDrops(num, rng);
+            }
+            else
+            {
+                dropTable.canDropBeReplaced = false;
+                WeightedSelection<PickupIndex> selection = ((DoppelgangerDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
+                for (int i = 0; i < selection.Count; i++)
+                {
+                    if (GetTier(selection.GetChoice(i).value) != tier || selection.GetChoice(i).value == pickupIndex)
+                    {
+                        selection.RemoveChoice(i);
+                        i--;
+                    }
+                }
+                num = Mathf.Min(Settings.GetChoiceCountByTier(tier) - 1, selection.Count);
+                if (num == 0)
+                {
+                    return pickupInfo;
+                }
+                choices = new PickupIndex[num + 1];
+                choices2 = dropTable.GenerateUniqueDrops(num, rng);
+                dropTable.canDropBeReplaced = true;
+                dropTable.InvokeMethod("Regenerate", Run.instance);
+            }
+
+            choices[0] = pickupIndex;
+            for (int i = 0; i < num; i++)
+            {
+                choices[i + 1] = choices2[i];
+            }
             pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
             pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
             return pickupInfo;
