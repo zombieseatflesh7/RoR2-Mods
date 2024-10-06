@@ -334,10 +334,11 @@ namespace ArtifactOfPotential
         private static void GlobalEventManager_OnCharacterDeath(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, GlobalEventManager self, DamageReport damageReport)
         {
             if (damageReport.attackerMaster == null) { orig(self, damageReport); return; }
-            if (damageReport.attackerMaster.inventory.GetItemCount(DLC2Content.Items.ResetChests) > 0) 
+            CharacterMaster attackMaster = damageReport.attackerOwnerMaster ?? damageReport.attackerMaster;
+            if (attackMaster.inventory.GetItemCount(DLC2Content.Items.ResetChests) > 0 && (damageReport.victimBody.isChampion || damageReport.victimBody.isElite)) 
             {
-                //Have to make a new rng for this
-                rng = new Xoroshiro128Plus(Run.instance.treasureRng.nextUlong);
+
+                rng = Run.instance.runRNG;
                 dropTable = GlobalEventManager.CommonAssets.dtSonorousEchoPath;
                 nextPickup = PickupType.BasicDropTable;
             }
@@ -358,11 +359,11 @@ namespace ArtifactOfPotential
                     orig(pickupIndex, position, velocity);
                     break;
                 case PickupType.NoDropTable:
-                    nextPickup = PickupType.Ignore;
+                    //nextPickup = PickupType.Ignore;
                     PickupDropletController.CreatePickupDroplet(CreatePickupInfo_NoDropTable(pickupIndex, position), position, velocity);
                     break;
                 case PickupType.BasicDropTable:
-                    nextPickup = PickupType.Ignore;
+                    //nextPickup = PickupType.Ignore;
                     PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BasicPickupDropTable(pickupIndex, position), position, velocity);
                     break;
                 case PickupType.BossDropTable:
