@@ -28,7 +28,7 @@ namespace ArtifactOfPotential
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "ArtifactOfPotential";
-        public const string PluginVersion = "1.2.2";
+        public const string PluginVersion = "1.2.4";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -318,8 +318,6 @@ namespace ArtifactOfPotential
 
         private static void DoppelgangerInvasionManager_OnCharacterDeathGlobal(On.RoR2.Artifacts.DoppelgangerInvasionManager.orig_OnCharacterDeathGlobal orig, DoppelgangerInvasionManager self, DamageReport damageReport)
         {
-            //rng = typeof(DoppelgangerInvasionManager).GetFieldValue<Xoroshiro128Plus>("treasureRng");
-            //dropTable = typeof(DoppelgangerInvasionManager).GetFieldValue<PickupDropTable>("dropTable");
             rng = self.treasureRng;
             dropTable = self.dropTable;
             nextPickup = PickupType.DoppelgangerDropTable;
