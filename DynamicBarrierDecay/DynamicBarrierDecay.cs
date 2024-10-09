@@ -1,6 +1,5 @@
 using BepInEx;
 using BepInEx.Configuration;
-using R2API;
 using R2API.Utils;
 using RoR2;
 using System;
@@ -11,7 +10,7 @@ namespace DynamicBarrierDecay
 {
 	//[BepInDependency()]
 
-    [BepInPlugin("com.zombieseatflesh7.dynamicbarrierdecay", "DynamicBarrierDecay", "2.0.0")]
+    [BepInPlugin("com.zombieseatflesh7.dynamicbarrierdecay", "DynamicBarrierDecay", "2.0.1")]
 
 	public class DynamicBarrierDecay : BaseUnityPlugin
 	{

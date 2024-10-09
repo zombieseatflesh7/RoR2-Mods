@@ -1,20 +1,18 @@
 using BepInEx;
-using R2API;
 using R2API.Utils;
 using RoR2;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace LysateBeacons
 {
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
 	
-	public class MainPlugin : BaseUnityPlugin
+	public class LysateBeacons : BaseUnityPlugin
 	{
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "LysateBeacons";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.0.1";
 
         public static Dictionary<CaptainSupplyDropController, StockData> beaconStocks = null;
 

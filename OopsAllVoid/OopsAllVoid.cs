@@ -2,7 +2,6 @@ using BepInEx;
 using R2API;
 using R2API.Utils;
 using RoR2;
-using RoR2.Artifacts;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using System.Collections.Generic;
@@ -18,7 +17,7 @@ namespace OopsAllVoid
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "OopsAllVoid";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.1.1";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -27,7 +26,7 @@ namespace OopsAllVoid
             Log.Init(Logger);
 
             PInfo = Info;
-            Assets.Init();
+            ModAssets.Init();
             CorruptionArtifact.Init();
         }
     }
@@ -60,8 +59,8 @@ namespace OopsAllVoid
             Corruption.cachedName = "ArtifactOfCorruption";
             Corruption.nameToken = "Artifact of Corruption";
             Corruption.descriptionToken = "Replaces all items except equipment and lunar items with void items.";
-            Corruption.smallIconSelectedSprite = Assets.AssetBundle.LoadAsset<Sprite>("texArtifactCorruptionEnabled.png");
-            Corruption.smallIconDeselectedSprite = Assets.AssetBundle.LoadAsset<Sprite>("texArtifactCorruptionDisabled.png");
+            Corruption.smallIconSelectedSprite = ModAssets.AssetBundle.LoadAsset<Sprite>("texArtifactCorruptionEnabled.png");
+            Corruption.smallIconDeselectedSprite = ModAssets.AssetBundle.LoadAsset<Sprite>("texArtifactCorruptionDisabled.png");
             ContentAddition.AddArtifactDef(Corruption);
 
             RunArtifactManager.onArtifactEnabledGlobal += OnArtifactEnabled;
@@ -169,7 +168,7 @@ namespace OopsAllVoid
         }
     }
 
-    public static class Assets
+    public static class ModAssets
     {
         public static AssetBundle AssetBundle;
         public const string dllName = "OopsAllVoid.dll";
