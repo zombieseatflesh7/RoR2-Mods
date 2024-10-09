@@ -28,7 +28,7 @@ namespace ArtifactOfPotential
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "ArtifactOfPotential";
-        public const string PluginVersion = "1.2.2";
+        public const string PluginVersion = "1.2.4";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -38,7 +38,7 @@ namespace ArtifactOfPotential
 
             PInfo = Info;
             InitConfig();
-            Assets.Init();
+            Asset.Init();
             PotentialArtifact.Init();
         }
 
@@ -48,6 +48,8 @@ namespace ArtifactOfPotential
             Settings.AnyTierModeChoiceCount = Config.Bind<int>("Any Tier Mode", "Any Tier Mode - Choice Count", 3, "The number of choices you get from void potentials when \"Any Tier Mode\" is enabled. Does not affect void items.");
             Settings.AnyTierModeVoid = Config.Bind<bool>("Any Tier Mode", "Any Tier Mode - Void", true, "Similar to Any Tier Mode, but only affects void items.");
             Settings.AnyTierModeVoidChoiceCount = Config.Bind<int>("Any Tier Mode", "Any Tier Mode - Void - Choice Count", 3, "The number of choices you get from void tier void potentials when \"Any Tier Mode - Void\" is enabled. Only affects void items.");
+            Settings.AnyTierModeDoppelganger = Config.Bind<bool>("Any Tier Mode", "Any Tier Mode - Artifact of Vengance", false, "Similar to Any Tier Mode, but only affects Artifact of Vengance. Any Tier Mode Void will still take affect if this is false");
+            Settings.AnyTierModeDoppelgangerCount = Config.Bind<int>("Any Tier Mode", "Any Tier Mode - Artifact of Vengance - Choice Count", 3, "The number of choices you get from your doppelganger when \"Any Tier Mode - Artifact of Vengance\" is enabled.");
 
             Settings.ChestsAffected = Config.Bind<bool>("Item Sources Affected", "Chests", true, "Whether or not chests should drop void potentials.");
             Settings.ShrineOfChanceAffected = Config.Bind<bool>("Item Sources Affected", "Shrines of chance", true, "Whether or not shrines of chance should drop void potentials.");
@@ -57,6 +59,8 @@ namespace ArtifactOfPotential
             Settings.ShopsAffected = Config.Bind<bool>("Item Sources Affected", "Shops", false, "Whether or not shops should drop void potentials. This includes: The bazaar shop, printers, and cauldrons. This setting will change in the future.");
             Settings.BossAffected = Config.Bind<bool>("Item Sources Affected", "Boss", true, "Whether or not bosses should drop void potentials. This includes: the teleporter event, Alloy Worship Unit, Aurelionite, and any other \"boss\" event.");
             Settings.SacrificeAffected = Config.Bind<bool>("Item Sources Affected", "Artifact of Sacrifice", true, "Whether or not Artifact of Sacrifice should drop void potentials.");
+            Settings.DoppelgangersAffected = Config.Bind<bool>("Item Sources Affected", "Artifact of Vengance", true, "Whether or not Artifact of Vengance should void potentials.");
+            Settings.SonorousWhispersAffected = Config.Bind<bool>("Item Sources Affected", "Sonorous Whispers", true, "Whether or not Sonorous Whispers should drop void potentials.");
 
             Settings.Tier1ChoiceCount = Config.Bind<int>("Number of Options by Tier", "Common Options", 3, "The number of choices you get from common tier void potentials. Set to 1 to disable void potentials for this tier.");
             Settings.Tier2ChoiceCount = Config.Bind<int>("Number of Options by Tier", "Uncommon Options", 3, "The number of choices you get from uncommon tier void potentials. Set to 1 to disable void potentials for this tier.");
@@ -79,10 +83,11 @@ namespace ArtifactOfPotential
         public static GameObject commandCubePrefab = null;
         public static Xoroshiro128Plus rng = null;
         public static PickupDropTable dropTable = null;
+        public static GameObject currentModelObjectOverride = null;
 
         public enum PickupType
         {
-            Ignore, NoDropTable, BasicDropTable, BossDropTable
+            Ignore, NoDropTable, BasicDropTable, BossDropTable, DoppelgangerDropTable
         }
         public static PickupType nextPickup = PickupType.Ignore;
 
@@ -92,8 +97,8 @@ namespace ArtifactOfPotential
             Potential.cachedName = "ArtifactOfPotential";
             Potential.nameToken = "Artifact of Potential";
             Potential.descriptionToken = "Most items become Void Potentials.";
-            Potential.smallIconSelectedSprite = Assets.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialEnabled.png");
-            Potential.smallIconDeselectedSprite = Assets.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialDisabled.png");
+            Potential.smallIconSelectedSprite = Asset.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialEnabled.png");
+            Potential.smallIconDeselectedSprite = Asset.AssetBundle.LoadAsset<Sprite>("texArtifactPotentialDisabled.png");
             ContentAddition.AddArtifactDef(Potential);
 
             voidPotentialPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/DLC1/OptionPickup/OptionPickup.prefab").WaitForCompletion();
@@ -111,19 +116,26 @@ namespace ArtifactOfPotential
             }
             if (NetworkServer.active)
             {
-                if(Settings.ChestsAffected.Value)
+                if (Settings.ChestsAffected.Value)
                     On.RoR2.ChestBehavior.BaseItemDrop += ChestBehavior_BaseItemDrop;
-                if(Settings.ShrineOfChanceAffected.Value)
+                if (Settings.ShrineOfChanceAffected.Value)
                     On.RoR2.ShrineChanceBehavior.AddShrineStack += ShrineChanceBehavior_AddShrineStack;
-                if(Settings.BossAffected.Value)
+                if (Settings.BossAffected.Value)
                     On.RoR2.BossGroup.DropRewards += BossGroup_DropRewards;
-                if(Settings.HiddenMultishopsAffected.Value || Settings.MultishopsAffected.Value || Settings.ShopsAffected.Value)
+                if (Settings.HiddenMultishopsAffected.Value || Settings.MultishopsAffected.Value || Settings.ShopsAffected.Value)
                     On.RoR2.ShopTerminalBehavior.DropPickup += ShopTerminalBehavior_DropPickup;
-                if(Settings.SacrificeAffected.Value)
+                if (Settings.SacrificeAffected.Value)
                     On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath += SacrificeArtifactManager_OnServerCharacterDeath;
+                if (Settings.DoppelgangersAffected.Value)
+                    On.RoR2.Artifacts.DoppelgangerInvasionManager.OnCharacterDeathGlobal += DoppelgangerInvasionManager_OnCharacterDeathGlobal;
+                if (Settings.SonorousWhispersAffected.Value)
+                    On.RoR2.GlobalEventManager.OnCharacterDeath += GlobalEventManager_OnCharacterDeath;
 
+                On.RoR2.PickupDisplay.RebuildModel += PickupDisplay_RebuildModel;
+
+                On.RoR2.GenericPickupController.CreatePickup += GenericPickupController_CreatePickup;
                 On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 += PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
-                On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3 += PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3;
+                On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 += PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3;
             }
         }
 
@@ -138,8 +150,93 @@ namespace ArtifactOfPotential
             On.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
             On.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
             On.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
+            On.RoR2.Artifacts.DoppelgangerInvasionManager.OnCharacterDeathGlobal -= DoppelgangerInvasionManager_OnCharacterDeathGlobal;
+            On.RoR2.GlobalEventManager.OnCharacterDeath -= GlobalEventManager_OnCharacterDeath;
+            On.RoR2.PickupDisplay.RebuildModel -= PickupDisplay_RebuildModel;
+            On.RoR2.GenericPickupController.CreatePickup -= GenericPickupController_CreatePickup;
             On.RoR2.PickupDropletController.CreatePickupDroplet_PickupIndex_Vector3_Vector3 -= PickupDropletController_CreatePickupDroplet_PickupIndex_Vector3_Vector3;
-            On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3 -= PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3;
+            On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 -= PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3;
+        }
+
+        private static void PickupDisplay_RebuildModel(On.RoR2.PickupDisplay.orig_RebuildModel orig, PickupDisplay self, GameObject modelObjectOverride)
+        {
+            if (modelObjectOverride != null && currentModelObjectOverride == null)
+            {
+                currentModelObjectOverride = modelObjectOverride;
+            }
+            else if (currentModelObjectOverride != null)
+            {
+                modelObjectOverride = currentModelObjectOverride;
+            }
+
+            orig(self, modelObjectOverride);
+            
+            if (currentModelObjectOverride != null)
+            {
+
+                if ((bool)self.tier1ParticleEffect)
+                {
+                    self.tier1ParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.tier2ParticleEffect)
+                {
+                    self.tier2ParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.tier3ParticleEffect)
+                {
+                    self.tier3ParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.equipmentParticleEffect)
+                {
+                    self.equipmentParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.lunarParticleEffect)
+                {
+                    self.lunarParticleEffect.SetActive(value: false);
+                }
+                if ((bool)self.voidParticleEffect)
+                {
+                    self.voidParticleEffect.SetActive(value: false);
+                }
+            }
+        }
+
+        private static GenericPickupController GenericPickupController_CreatePickup(On.RoR2.GenericPickupController.orig_CreatePickup orig, ref GenericPickupController.CreatePickupInfo createPickupInfo)
+        {
+            if (createPickupInfo.prefabOverride == commandCubePrefab)
+            {
+                //This is a bit hacky but it's the only way I could find to make artifact of command prefab to work for now.
+                //Basically cutting out a portion of the decompiled code to make it work.
+                //Looking for mesh renderer child that doesn't exist in commandcube.prefab
+                //Most likely to cause conflict issues - Valkarin
+                Log.LogDebug("Prefab Overrid is CommandCube");
+                GameObject gameObject = Object.Instantiate(createPickupInfo.prefabOverride ?? GenericPickupController.pickupPrefab, createPickupInfo.position, createPickupInfo.rotation);
+                GenericPickupController component = gameObject.GetComponent<GenericPickupController>();
+                if ((bool)component)
+                {
+                    component.NetworkpickupIndex = createPickupInfo.pickupIndex;
+                    component.chestGeneratedFrom = createPickupInfo.chest;
+                }
+                PickupIndexNetworker component2 = gameObject.GetComponent<PickupIndexNetworker>();
+                if ((bool)component2)
+                {
+                    component2.NetworkpickupIndex = createPickupInfo.pickupIndex;
+                }
+                PickupPickerController component3 = gameObject.GetComponent<PickupPickerController>();
+                if ((bool)component3 && createPickupInfo.pickerOptions != null)
+                {
+                    component3.SetOptionsServer(createPickupInfo.pickerOptions);
+                }
+                NetworkServer.Spawn(gameObject);
+                return component;
+            }
+            else
+            {
+                orig(ref createPickupInfo);
+            }
+            currentModelObjectOverride = null;
+            return null;
+
         }
 
         private static void ChestBehavior_BaseItemDrop(On.RoR2.ChestBehavior.orig_BaseItemDrop orig, ChestBehavior self)
@@ -151,6 +248,7 @@ namespace ArtifactOfPotential
             rng = null;
             dropTable = null;
             nextPickup = PickupType.Ignore;
+            currentModelObjectOverride = null;
         }
 
         private static void ShrineChanceBehavior_AddShrineStack(On.RoR2.ShrineChanceBehavior.orig_AddShrineStack orig, ShrineChanceBehavior self, Interactor activator)
@@ -162,6 +260,7 @@ namespace ArtifactOfPotential
             rng = null;
             dropTable = null;
             nextPickup = PickupType.Ignore;
+            currentModelObjectOverride = null;
         }
 
         private static void SacrificeArtifactManager_OnServerCharacterDeath(On.RoR2.Artifacts.SacrificeArtifactManager.orig_OnServerCharacterDeath orig, DamageReport damageReport)
@@ -173,6 +272,7 @@ namespace ArtifactOfPotential
             rng = null;
             dropTable = null;
             nextPickup = PickupType.Ignore;
+            currentModelObjectOverride = null;
         }
 
         private static void ShopTerminalBehavior_DropPickup(On.RoR2.ShopTerminalBehavior.orig_DropPickup orig, ShopTerminalBehavior self)
@@ -184,6 +284,7 @@ namespace ArtifactOfPotential
                 orig(self);
                 rng = null;
                 nextPickup = PickupType.Ignore;
+                currentModelObjectOverride = null;
                 return;
             }
             if (self.serverMultiShopController == null && Settings.ShopsAffected.Value)
@@ -195,6 +296,7 @@ namespace ArtifactOfPotential
                 rng = null;
                 dropTable = null;
                 nextPickup = PickupType.Ignore;
+                currentModelObjectOverride = null;
                 return;
             }
             orig(self);
@@ -207,10 +309,42 @@ namespace ArtifactOfPotential
             orig(self);
             rng = null;
             nextPickup = PickupType.Ignore;
+            currentModelObjectOverride = null;
             for (int i = 0; i < bossDropsByTier.Length; i++)
             {
                 bossDropsByTier[i] = null;
             }
+        }
+
+        private static void DoppelgangerInvasionManager_OnCharacterDeathGlobal(On.RoR2.Artifacts.DoppelgangerInvasionManager.orig_OnCharacterDeathGlobal orig, DoppelgangerInvasionManager self, DamageReport damageReport)
+        {
+            rng = self.treasureRng;
+            dropTable = self.dropTable;
+            nextPickup = PickupType.DoppelgangerDropTable;
+            orig(self, damageReport);
+            rng = null;
+            nextPickup = PickupType.Ignore;
+            dropTable = null;
+            currentModelObjectOverride = null;
+        }
+
+        //Sonorous Whispers
+        private static void GlobalEventManager_OnCharacterDeath(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, GlobalEventManager self, DamageReport damageReport)
+        {
+            if (damageReport.attackerMaster == null) { orig(self, damageReport); return; }
+            CharacterMaster attackMaster = damageReport.attackerOwnerMaster ?? damageReport.attackerMaster;
+            if (attackMaster.inventory.GetItemCount(DLC2Content.Items.ResetChests) > 0 && (damageReport.victimBody.isChampion || damageReport.victimBody.isElite)) 
+            {
+
+                rng = Run.instance.runRNG;
+                dropTable = GlobalEventManager.CommonAssets.dtSonorousEchoPath;
+                nextPickup = PickupType.BasicDropTable;
+            }
+            orig(self, damageReport);
+            rng = null;
+            dropTable = null;
+            nextPickup = PickupType.Ignore;
+            currentModelObjectOverride = null;
         }
 
         public static PickupIndex[][] bossDropsByTier = new PickupIndex[10][];
@@ -223,24 +357,27 @@ namespace ArtifactOfPotential
                     orig(pickupIndex, position, velocity);
                     break;
                 case PickupType.NoDropTable:
-                    nextPickup = PickupType.Ignore;
-                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_NoDropTable(pickupIndex, position), velocity);
+                    //nextPickup = PickupType.Ignore;
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_NoDropTable(pickupIndex, position), position, velocity);
                     break;
                 case PickupType.BasicDropTable:
-                    nextPickup = PickupType.Ignore;
-                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BasicPickupDropTable(pickupIndex, position), velocity);
+                    //nextPickup = PickupType.Ignore;
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BasicPickupDropTable(pickupIndex, position), position, velocity);
                     break;
                 case PickupType.BossDropTable:
-                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BossDropTable(pickupIndex, position), velocity);
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_BossDropTable(pickupIndex, position), position, velocity);
+                    break;
+                case PickupType.DoppelgangerDropTable:
+                    PickupDropletController.CreatePickupDroplet(CreatePickupInfo_DoppelGangerDropTable(pickupIndex, position), position, velocity);
                     break;
             }
         }
 
-        private static void PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 velocity)
+        private static void PickupDropletController_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 position, Vector3 velocity)
         {
             if (pickupInfo.pickerOptions != null && pickupInfo.pickerOptions.Length > 0)
             {
-                orig(pickupInfo, velocity);
+                orig(pickupInfo, position, velocity);
                 return;
             }
 
@@ -248,21 +385,25 @@ namespace ArtifactOfPotential
             switch (nextPickup)
             {
                 case PickupType.NoDropTable:
-                    nextPickup = PickupType.Ignore;
+                    //nextPickup = PickupType.Ignore;
                     newPickupInfo = CreatePickupInfo_NoDropTable(pickupInfo.pickupIndex, pickupInfo.position);
                     newPickupInfo.chest = pickupInfo.chest;
                     newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
                     pickupInfo = newPickupInfo;
                     break;
                 case PickupType.BasicDropTable:
-                    nextPickup = PickupType.Ignore;
+                    //nextPickup = PickupType.Ignore;
                     newPickupInfo = CreatePickupInfo_BasicPickupDropTable(pickupInfo.pickupIndex, pickupInfo.position);
                     newPickupInfo.chest = pickupInfo.chest;
-                    newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
+                    if (pickupInfo.artifactFlag != GenericPickupController.PickupArtifactFlag.NONE)
+                    {
+                        newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
+
+                    }
                     pickupInfo = newPickupInfo;
                     break;
             }
-            orig(pickupInfo, velocity);
+            orig(pickupInfo, position, velocity);
         }
 
         private static GenericPickupController.CreatePickupInfo CreatePickupInfo_NoDropTable(PickupIndex pickupIndex, Vector3 position)
@@ -467,6 +608,79 @@ namespace ArtifactOfPotential
                 }
             }*/
 
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
+            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            return pickupInfo;
+        }
+
+        private static GenericPickupController.CreatePickupInfo CreatePickupInfo_DoppelGangerDropTable(PickupIndex pickupIndex, Vector3 position)
+        {
+            Log.LogInfo("Creating pickup from doppelganger drop table");
+
+            GenericPickupController.CreatePickupInfo pickupInfo = new GenericPickupController.CreatePickupInfo
+            {
+                position = position,
+                rotation = Quaternion.identity,
+                pickupIndex = pickupIndex
+            };
+
+            if (dropTable == null)
+            {
+                Log.LogInfo("The droptable is null! This is usually the result of an error.");
+                rng = null;
+                return pickupInfo;
+            }
+            int tier = GetTier(pickupIndex);
+            PickupIndex[] choices = null;
+            PickupIndex[] choices2 = null;
+            int num = 0;
+            if ((Settings.AnyTierMode.Value && tier <= 6) || (Settings.AnyTierModeVoid.Value && tier >= 7) || (Settings.AnyTierModeDoppelganger.Value && tier <= 6)) //Any Tier Mode or Any Tier Mode Viod is true
+            {
+                WeightedSelection<PickupIndex> selection = ((DoppelgangerDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
+                for (int i = 0; i < selection.Count; i++)
+                {
+                    if (selection.GetChoice(i).value == pickupIndex)
+                    {
+                        selection.RemoveChoice(i);
+                        i--;
+                    }
+                }
+                num = Mathf.Min((tier <= 6) ? Settings.AnyTierMode.Value ? (Settings.AnyTierModeChoiceCount.Value - 1) : (Settings.AnyTierModeDoppelgangerCount.Value -1 ) : (Settings.AnyTierModeVoidChoiceCount.Value - 1), selection.Count);
+                if (num == 0)
+                {
+                    return pickupInfo;
+                }
+                choices = new PickupIndex[num + 1];
+                choices2 = dropTable.GenerateUniqueDrops(num, rng);
+            }
+            else
+            {
+                dropTable.canDropBeReplaced = false;
+                WeightedSelection<PickupIndex> selection = ((DoppelgangerDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
+                for (int i = 0; i < selection.Count; i++)
+                {
+                    if (GetTier(selection.GetChoice(i).value) != tier || selection.GetChoice(i).value == pickupIndex)
+                    {
+                        selection.RemoveChoice(i);
+                        i--;
+                    }
+                }
+                num = Mathf.Min(Settings.GetChoiceCountByTier(tier) - 1, selection.Count);
+                if (num == 0)
+                {
+                    return pickupInfo;
+                }
+                choices = new PickupIndex[num + 1];
+                choices2 = dropTable.GenerateUniqueDrops(num, rng);
+                dropTable.canDropBeReplaced = true;
+                dropTable.InvokeMethod("Regenerate", Run.instance);
+            }
+
+            choices[0] = pickupIndex;
+            for (int i = 0; i < num; i++)
+            {
+                choices[i + 1] = choices2[i];
+            }
             pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
             pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
             return pickupInfo;

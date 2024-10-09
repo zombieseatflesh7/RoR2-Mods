@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace ArtifactOfPotential
 {
-	public static class Assets
+	public static class Asset
 	{
 		public static AssetBundle AssetBundle;
 		public const string bundleName = "aopassetbundle";

@@ -12,6 +12,8 @@ namespace ArtifactOfPotential
         public static ConfigEntry<int> AnyTierModeChoiceCount;
         public static ConfigEntry<bool> AnyTierModeVoid;
         public static ConfigEntry<int> AnyTierModeVoidChoiceCount;
+        public static ConfigEntry<bool> AnyTierModeDoppelganger;
+        public static ConfigEntry<int> AnyTierModeDoppelgangerCount;
 
         //Item Sources Affected
         public static ConfigEntry<bool> ChestsAffected;
@@ -23,6 +25,7 @@ namespace ArtifactOfPotential
         public static ConfigEntry<bool> BossAffected;
         public static ConfigEntry<bool> SacrificeAffected;
         public static ConfigEntry<bool> DoppelgangersAffected;
+        public static ConfigEntry<bool> SonorousWhispersAffected;
 
         //Boss
 
