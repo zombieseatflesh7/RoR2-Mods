@@ -5,16 +5,16 @@ using R2API;
 using R2API.Utils;
 using RoR2;
 using RoR2.Artifacts;
-using System;
 using System.Collections.Generic;
 using System.Security.Permissions;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.Networking;
-using UnityEngine.UIElements;
 using static RoR2.GenericPickupController;
 
+#pragma warning disable CS0618 // Type or member is obsolete
 [assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
+#pragma warning restore CS0618 // Type or member is obsolete
 
 namespace ArtifactOfPotential
 {
@@ -30,7 +30,7 @@ namespace ArtifactOfPotential
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "ArtifactOfPotential";
-        public const string PluginVersion = "1.3.1";
+        public const string PluginVersion = "1.3.2";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -111,7 +111,7 @@ namespace ArtifactOfPotential
                 if (Settings.ShrineOfChanceAffected.Value)
                     IL.RoR2.ShrineChanceBehavior.AddShrineStack += ShrineChanceBehavior_AddShrineStack;
                 if (Settings.HiddenMultishopsAffected.Value || Settings.MultishopsAffected.Value || Settings.ShopsAffected.Value)
-                    IL.RoR2.ShopTerminalBehavior.DropPickup += ShopTerminalBehavior_DropPickup;
+                    IL.RoR2.ShopTerminalBehavior.DropPickup_bool += ShopTerminalBehavior_DropPickup;
                 if (Settings.BossAffected.Value)
                     IL.RoR2.BossGroup.DropRewards += BossGroup_DropRewards;
                 if (Settings.SacrificeAffected.Value)
@@ -133,7 +133,7 @@ namespace ArtifactOfPotential
 
             IL.RoR2.ChestBehavior.BaseItemDrop -= ChestBehavior_BaseItemDrop;
             IL.RoR2.ShrineChanceBehavior.AddShrineStack -= ShrineChanceBehavior_AddShrineStack;
-            IL.RoR2.ShopTerminalBehavior.DropPickup -= ShopTerminalBehavior_DropPickup;
+            IL.RoR2.ShopTerminalBehavior.DropPickup_bool -= ShopTerminalBehavior_DropPickup;
             IL.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
             IL.RoR2.Artifacts.SacrificeArtifactManager.OnServerCharacterDeath -= SacrificeArtifactManager_OnServerCharacterDeath;
             IL.RoR2.Artifacts.DoppelgangerInvasionManager.OnCharacterDeathGlobal -= DoppelgangerInvasionManager_OnCharacterDeathGlobal;
@@ -146,14 +146,15 @@ namespace ArtifactOfPotential
         private static void ChestBehavior_BaseItemDrop(ILContext il)
         {
             ILCursor c = new ILCursor(il);
-            c.GotoNext(MoveType.After, i => i.MatchLdloc(3));
+            c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
+            c.Remove();
             c.Emit(OpCodes.Ldarg_0);
-            c.EmitDelegate((CreatePickupInfo pickupInfo, ChestBehavior chest) => 
+            c.EmitDelegate((CreatePickupInfo pickupInfo, Vector3 position, Vector3 velocity, ChestBehavior chest) => 
             { 
-                CreatePickupInfo newPickupInfo = CreatePickupInfo_Basic(pickupInfo.pickupIndex, pickupInfo.position, chest.rng, chest.dropTable);
+                CreatePickupInfo newPickupInfo = CreatePickupInfo_Basic(pickupInfo.pickup, pickupInfo.position, chest.rng, chest.dropTable);
                 newPickupInfo.chest = chest;
                 newPickupInfo.artifactFlag = pickupInfo.artifactFlag;
-                return newPickupInfo;
+                PickupDropletController.CreatePickupDroplet(newPickupInfo, position, velocity);
             });
         }
 
@@ -163,9 +164,9 @@ namespace ArtifactOfPotential
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.Remove();
             c.Emit(OpCodes.Ldarg_0);
-            c.EmitDelegate((PickupIndex pickupIndex, Vector3 position, Vector3 velocity, ShrineChanceBehavior shrine) =>
+            c.EmitDelegate((UniquePickup pickup, Vector3 position, Vector3 velocity, ShrineChanceBehavior shrine) =>
             {
-                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickupIndex, position, shrine.rng, shrine.dropTable);
+                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickup, position, shrine.rng, shrine.dropTable);
                 PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
             });
         }
@@ -176,23 +177,24 @@ namespace ArtifactOfPotential
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.Remove();
             c.Emit(OpCodes.Ldarg_0);
-            c.EmitDelegate((PickupIndex pickupIndex, Vector3 position, Vector3 velocity, ShopTerminalBehavior shop) =>
+            c.EmitDelegate((UniquePickup pickup, Vector3 position, Vector3 velocity, bool isDuplicated, ShopTerminalBehavior shop) =>
             {
                 CreatePickupInfo pickupInfo = new CreatePickupInfo
                 {
                     position = position,
                     rotation = Quaternion.identity,
-                    pickupIndex = pickupIndex
+                    pickup = pickup,
                 };
                 if (shop.serverMultiShopController != null && (Settings.MultishopsAffected.Value || (Settings.HiddenMultishopsAffected.Value && shop.GetFieldValue<bool>("hidden")))) // multishops
-                    pickupInfo = CreatePickupInfo_Random(pickupIndex, position, shop.serverMultiShopController.rng);
+                    pickupInfo = CreatePickupInfo_Random(pickupInfo.pickup, position, shop.serverMultiShopController.rng);
                 else if (shop.serverMultiShopController == null && Settings.ShopsAffected.Value) // shops
-                    pickupInfo = CreatePickupInfo_Basic(pickupIndex, position, shop.rng, shop.dropTable);
+                    pickupInfo = CreatePickupInfo_Basic(pickupInfo.pickup, position, shop.rng, shop.dropTable);
+                pickupInfo.duplicated = isDuplicated;
                 PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
             });
         }
 
-        public static PickupIndex[][] bossDropsByTier = new PickupIndex[10][];
+        public static List<UniquePickup>[] bossDropsByTier = new List<UniquePickup>[12];
         private static void BossGroup_DropRewards(ILContext il)
         {
             ILCursor c = new ILCursor(il);
@@ -204,9 +206,9 @@ namespace ArtifactOfPotential
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.Remove();
             c.Emit(OpCodes.Ldarg_0);
-            c.EmitDelegate((PickupIndex pickupIndex, Vector3 position, Vector3 velocity, BossGroup boss) =>
+            c.EmitDelegate((UniquePickup pickup, Vector3 position, Vector3 velocity, BossGroup boss) =>
             {
-                CreatePickupInfo pickupInfo = CreatePickupInfo_Boss(pickupIndex, position, boss.rng);
+                CreatePickupInfo pickupInfo = CreatePickupInfo_Boss(pickup, position, boss.rng);
                 PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
             });
         }
@@ -216,9 +218,9 @@ namespace ArtifactOfPotential
             ILCursor c = new ILCursor(il);
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.Remove();
-            c.EmitDelegate((PickupIndex pickupIndex, Vector3 position, Vector3 velocity) =>
+            c.EmitDelegate((UniquePickup pickup, Vector3 position, Vector3 velocity) =>
             {
-                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickupIndex, position, SacrificeArtifactManager.treasureRng, SacrificeArtifactManager.dropTable);
+                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickup, position, SacrificeArtifactManager.treasureRng, SacrificeArtifactManager.dropTable);
                 PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
             });
         }
@@ -229,9 +231,9 @@ namespace ArtifactOfPotential
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.Remove();
             c.Emit(OpCodes.Ldarg_0);
-            c.EmitDelegate((PickupIndex pickupIndex, Vector3 position, Vector3 velocity, DoppelgangerInvasionManager doppel) =>
+            c.EmitDelegate((UniquePickup pickup, Vector3 position, Vector3 velocity, DoppelgangerInvasionManager doppel) =>
             {
-                CreatePickupInfo pickupInfo = CreatePickupInfo_Doppelganger(pickupIndex, position, doppel.treasureRng, doppel.dropTable);
+                CreatePickupInfo pickupInfo = CreatePickupInfo_Doppelganger(pickup, position, doppel.treasureRng, doppel.dropTable);
                 PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
             });
         }
@@ -243,21 +245,21 @@ namespace ArtifactOfPotential
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.Remove();
-            c.EmitDelegate((PickupIndex pickupIndex, Vector3 position, Vector3 velocity) =>
+            c.EmitDelegate((UniquePickup pickup, Vector3 position, Vector3 velocity) =>
             {
-                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickupIndex, position, Run.instance.runRNG, GlobalEventManager.CommonAssets.dtSonorousEchoPath);
+                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickup, position, Run.instance.runRNG, GlobalEventManager.CommonAssets.dtSonorousEchoPath);
                 PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
             });
             c.GotoNext(i => i.MatchCall<PickupDropletController>("CreatePickupDroplet"));
             c.Remove();
-            c.EmitDelegate((PickupIndex pickupIndex, Vector3 position, Vector3 velocity) =>
+            c.EmitDelegate((UniquePickup pickup, Vector3 position, Vector3 velocity) =>
             {
-                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickupIndex, position, Run.instance.runRNG, GlobalEventManager.CommonAssets.dtSonorousEchoPath);
+                CreatePickupInfo pickupInfo = CreatePickupInfo_Basic(pickup, position, Run.instance.runRNG, GlobalEventManager.CommonAssets.dtSonorousEchoPath);
                 PickupDropletController.CreatePickupDroplet(pickupInfo, position, velocity);
             });
         }
  
-        private static CreatePickupInfo CreatePickupInfo_Random(PickupIndex pickupIndex, Vector3 position, Xoroshiro128Plus rng)
+        private static CreatePickupInfo CreatePickupInfo_Random(UniquePickup pickup, Vector3 position, Xoroshiro128Plus rng)
         {
             Log.LogInfo("Creating pickup without drop table");
 
@@ -265,30 +267,22 @@ namespace ArtifactOfPotential
             {
                 position = position,
                 rotation = Quaternion.identity,
-                pickupIndex = pickupIndex
+                pickup = pickup
             };
 
-            int tier = GetTier(pickupIndex);
-            PickupIndex[] choices = null;
-            PickupIndex[] choices2 = null;
+            int tier = GetTier(pickup);
+            List<UniquePickup> choices = new List<UniquePickup>() { pickup };
+            choices.AddRange(GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickup, rng));
 
-            choices2 = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
-            int num = choices2.Length;
-            if (num == 0)
+            if (choices.Count == 1)
                 return pickupInfo;
 
-            choices = new PickupIndex[num + 1];
-
-            choices[0] = pickupIndex;
-            for (int i = 0; i < num; i++)
-                choices[i + 1] = choices2[i];
-
-            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
-            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromList(choices);
+            pickupInfo.prefabOverride = (choices.Count > 3) ? commandCubePrefab : voidPotentialPrefab;
             return pickupInfo;
         }
         
-        private static CreatePickupInfo CreatePickupInfo_Basic(PickupIndex pickupIndex, Vector3 position, Xoroshiro128Plus rng, PickupDropTable dropTable)
+        private static CreatePickupInfo CreatePickupInfo_Basic(UniquePickup pickup, Vector3 position, Xoroshiro128Plus rng, PickupDropTable dropTable)
         {
             Log.LogInfo("Creating choice from basic drop table");
 
@@ -296,19 +290,18 @@ namespace ArtifactOfPotential
             {
                 position = position,
                 rotation = Quaternion.identity,
-                pickupIndex = pickupIndex
+                pickup = pickup
             };
 
-            int tier = GetTier(pickupIndex);
-            PickupIndex[] choices = null;
-            PickupIndex[] choices2 = null;
+            int tier = GetTier(pickup);
+            List<UniquePickup> choices = new List<UniquePickup>() { pickup };
             int num = 0;
             if ((Settings.AnyTierMode.Value && tier <= 6) || (Settings.AnyTierModeVoid.Value && tier >= 7)) //Any Tier Mode or Any Tier Mode Viod is true
             {
-                WeightedSelection<PickupIndex> selection = ((BasicPickupDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
+                WeightedSelection<UniquePickup> selection = ((BasicPickupDropTable)dropTable).GetFieldValue<WeightedSelection<UniquePickup>>("selector");
                 for (int i = 0; i < selection.Count; i++)
                 {
-                    if (selection.GetChoice(i).value == pickupIndex)
+                    if (selection.GetChoice(i).value.pickupIndex == pickup.pickupIndex)
                     {
                         selection.RemoveChoice(i);
                         i--;
@@ -319,26 +312,26 @@ namespace ArtifactOfPotential
                 {
                     return pickupInfo;
                 }
-                choices = new PickupIndex[num + 1];
-                choices2 = dropTable.GenerateUniqueDrops(num, rng);
+                List<UniquePickup> choices2 = new List<UniquePickup>(num);
+                dropTable.GenerateDistinctPickups(choices2, num, rng);
+                choices.AddRange(choices2);
             }
             else if (tier == 6) //is lunar tier (for eulogy zero)
             {
-                choices2 = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
-                num = choices2.Length;
+                choices.AddRange(GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickup, rng));
+                num = choices.Count - 1;
                 if (num == 0)
                 {
                     return pickupInfo;
                 }
-                choices = new PickupIndex[num + 1];
             }
             else //is not lunar tier
             {
                 dropTable.canDropBeReplaced = false;
-                WeightedSelection<PickupIndex> selection = ((BasicPickupDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
+                WeightedSelection<UniquePickup> selection = ((BasicPickupDropTable)dropTable).GetFieldValue<WeightedSelection<UniquePickup>>("selector");
                 for (int i = 0; i < selection.Count; i++)
                 {
-                    if (GetTier(selection.GetChoice(i).value) != tier || selection.GetChoice(i).value == pickupIndex)
+                    if (GetTier(selection.GetChoice(i).value) != tier || selection.GetChoice(i).value.pickupIndex == pickup.pickupIndex)
                     {
                         selection.RemoveChoice(i);
                         i--;
@@ -349,23 +342,19 @@ namespace ArtifactOfPotential
                 {
                     return pickupInfo;
                 }
-                choices = new PickupIndex[num + 1];
-                choices2 = dropTable.GenerateUniqueDrops(num, rng);
+                List<UniquePickup> choices2 = new List<UniquePickup>(num);
+                dropTable.GenerateDistinctPickups(choices2, num, rng);
+                choices.AddRange(choices2);
                 dropTable.canDropBeReplaced = true;
                 dropTable.InvokeMethod("Regenerate", Run.instance);
             }
-
-            choices[0] = pickupIndex;
-            for (int i = 0; i < num; i++)
-            {
-                choices[i + 1] = choices2[i];
-            }
-            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
-            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromList(choices);
+            pickupInfo.prefabOverride = (choices.Count > 3) ? commandCubePrefab : voidPotentialPrefab;
             return pickupInfo;
         }
 
-        private static CreatePickupInfo CreatePickupInfo_Boss(PickupIndex pickupIndex, Vector3 position, Xoroshiro128Plus rng)
+        private static CreatePickupInfo CreatePickupInfo_Boss(UniquePickup pickup, Vector3 position, Xoroshiro128Plus rng)
         {
             Log.LogInfo("Creating pickup from boss drop table");
 
@@ -373,53 +362,43 @@ namespace ArtifactOfPotential
             {
                 position = position,
                 rotation = Quaternion.identity,
-                pickupIndex = pickupIndex
+                pickup = pickup
             };
 
-            int tier = GetTier(pickupIndex);
-            PickupIndex[] choices = null;
-            int num = 0;
+            int tier = GetTier(pickup);
+            List<UniquePickup> choices = new List<UniquePickup>() { pickup };
 
             if (tier == 6) //lunar tier (for eulogy zero)
             {
-                PickupIndex[] bossDropsLunar = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
-                if (bossDropsLunar == null || bossDropsLunar.Length == 0)
+                List<UniquePickup> bossDropsLunar = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickup, rng);
+                if (bossDropsLunar == null || bossDropsLunar.Count == 0)
                 {
                     return pickupInfo;
                 }
-                num = bossDropsLunar.Length;
-                choices = new PickupIndex[num + 1];
-                choices[0] = pickupIndex;
-                for (int i = 0; i < num; i++)
-                {
-                    choices[i + 1] = bossDropsLunar[i];
-                }
+                choices.AddRange(bossDropsLunar);
             }
             else
             {
                 if (bossDropsByTier[tier - 1] == null)
                 {
-                    bossDropsByTier[tier - 1] = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickupIndex, rng);
+                    bossDropsByTier[tier - 1] = GetUniqueItemsOfSameTier(Settings.GetChoiceCountByTier(tier) - 1, pickup, rng);
                 }
-                if (bossDropsByTier[tier - 1].Length == 0)
+                if (bossDropsByTier[tier - 1].Count == 0)
                 {
                     return pickupInfo;
                 }
-                num = bossDropsByTier[tier - 1].Length;
-                choices = new PickupIndex[num + 1];
-                choices[0] = pickupIndex;
-                for (int i = 0; i < num; i++)
-                {
-                    choices[i + 1] = bossDropsByTier[tier - 1][i];
-                }
+                choices.AddRange(bossDropsByTier[tier - 1]);
             }
 
-            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
-            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            if (choices.Count <= 1)
+                return pickupInfo;
+
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromList(choices);
+            pickupInfo.prefabOverride = (choices.Count > 3) ? commandCubePrefab : voidPotentialPrefab;
             return pickupInfo;
         }
 
-        private static CreatePickupInfo CreatePickupInfo_Doppelganger(PickupIndex pickupIndex, Vector3 position, Xoroshiro128Plus rng, PickupDropTable dropTable)
+        private static CreatePickupInfo CreatePickupInfo_Doppelganger(UniquePickup pickup, Vector3 position, Xoroshiro128Plus rng, PickupDropTable dropTable)
         {
             Log.LogInfo("Creating pickup from doppelganger drop table");
 
@@ -427,18 +406,17 @@ namespace ArtifactOfPotential
             {
                 position = position,
                 rotation = Quaternion.identity,
-                pickupIndex = pickupIndex
+                pickup = pickup
             };
 
-            PickupIndex[] choices = null;
-            PickupIndex[] choices2 = null;
+            List<UniquePickup> choices = new List<UniquePickup>() { pickup };
             int num = 0;
 
             //Using the Any Tier Mode logic
-            WeightedSelection<PickupIndex> selection = ((DoppelgangerDropTable)dropTable).GetFieldValue<WeightedSelection<PickupIndex>>("selector");
+            WeightedSelection<UniquePickup> selection = ((DoppelgangerDropTable)dropTable).GetFieldValue<WeightedSelection<UniquePickup>>("selector");
             for (int i = 0; i < selection.Count; i++)
             {
-                if (selection.GetChoice(i).value == pickupIndex)
+                if (selection.GetChoice(i).value.pickupIndex == pickup.pickupIndex)
                 {
                     selection.RemoveChoice(i);
                     i--;
@@ -449,23 +427,19 @@ namespace ArtifactOfPotential
             {
                 return pickupInfo;
             }
-            choices = new PickupIndex[num + 1];
-            choices2 = dropTable.GenerateUniqueDrops(num, rng);
+            List<UniquePickup> choices2 = new List<UniquePickup>(num);
+            dropTable.GenerateDistinctPickups(choices2, num, rng);
+            choices.AddRange(choices2);
             dropTable.InvokeMethod("Regenerate", Run.instance);
 
-            choices[0] = pickupIndex;
-            for (int i = 0; i < num; i++)
-            {
-                choices[i + 1] = choices2[i];
-            }
-            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromArray(choices);
-            pickupInfo.prefabOverride = (choices.Length > 3) ? commandCubePrefab : voidPotentialPrefab;
+            pickupInfo.pickerOptions = PickupPickerController.GenerateOptionsFromList(choices);
+            pickupInfo.prefabOverride = (choices.Count > 3) ? commandCubePrefab : voidPotentialPrefab;
             return pickupInfo;
         }
 
-        private static int GetTier(PickupIndex pickupIndex)
+        private static int GetTier(UniquePickup pickup)
         {
-            switch (PickupCatalog.GetPickupDef(pickupIndex).itemTier)
+            switch (PickupCatalog.GetPickupDef(pickup.pickupIndex).itemTier)
             {
                 case ItemTier.Tier1:
                     return 1;
@@ -485,8 +459,12 @@ namespace ArtifactOfPotential
                     return 9;
                 case ItemTier.VoidBoss:
                     return 10;
+                case ItemTier.FoodTier:
+                    return 11;
+                case ItemTier.AssignedAtRuntime:
+                    return 12;
                 default:
-                    if (PickupCatalog.GetPickupDef(pickupIndex).isLunar)
+                    if (PickupCatalog.GetPickupDef(pickup.pickupIndex).isLunar)
                     {
                         return 6;
                     }
@@ -494,10 +472,10 @@ namespace ArtifactOfPotential
             }
         }
 
-        private static PickupIndex[] GetUniqueItemsOfSameTier(int num, PickupIndex pickupIndex, Xoroshiro128Plus rng)
+        private static List<UniquePickup> GetUniqueItemsOfSameTier(int num, UniquePickup pickup, Xoroshiro128Plus rng)
         {
             List<PickupIndex> list = null;
-            switch (GetTier(pickupIndex))
+            switch (GetTier(pickup))
             {
                 case 1:
                     list = Run.instance.availableTier1DropList;
@@ -533,10 +511,10 @@ namespace ArtifactOfPotential
             WeightedSelection<PickupIndex> selection = new WeightedSelection<PickupIndex>(8);
             for(int i = 0; i < list.Count; i++)
             {
-                if(list[i] != pickupIndex)
+                if(list[i] != pickup.pickupIndex)
                     selection.AddChoice(list[i], 1f);
             }
-            return typeof(PickupDropTable).InvokeMethod<PickupIndex[]>("GenerateUniqueDropsFromWeightedSelection", num, rng, selection);
+            return PickupDropTable.GenerateDistinctFromWeightedSelection(new List<PickupIndex>(num), num, rng, selection).ConvertAll(pickupIndex => new UniquePickup(pickupIndex) { decayValue = pickup.decayValue });
         }
 
         private static void PickupDisplay_RebuildModel(On.RoR2.PickupDisplay.orig_RebuildModel orig, PickupDisplay self, GameObject modelObjectOverride)
@@ -595,13 +573,13 @@ namespace ArtifactOfPotential
                 GenericPickupController component = gameObject.GetComponent<GenericPickupController>();
                 if ((bool)component)
                 {
-                    component.NetworkpickupIndex = createPickupInfo.pickupIndex;
+                    component.Network_pickupState = createPickupInfo.pickup;
                     component.chestGeneratedFrom = createPickupInfo.chest;
                 }
                 PickupIndexNetworker component2 = gameObject.GetComponent<PickupIndexNetworker>();
                 if ((bool)component2)
                 {
-                    component2.NetworkpickupIndex = createPickupInfo.pickupIndex;
+                    component2.NetworkpickupState = createPickupInfo.pickup;
                 }
                 PickupPickerController component3 = gameObject.GetComponent<PickupPickerController>();
                 if ((bool)component3 && createPickupInfo.pickerOptions != null)
