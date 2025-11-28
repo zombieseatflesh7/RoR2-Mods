@@ -30,7 +30,7 @@ namespace ArtifactOfPotential
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "zombieseatflesh7";
         public const string PluginName = "ArtifactOfPotential";
-        public const string PluginVersion = "1.3.2";
+        public const string PluginVersion = "1.3.3";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -284,8 +284,6 @@ namespace ArtifactOfPotential
         
         private static CreatePickupInfo CreatePickupInfo_Basic(UniquePickup pickup, Vector3 position, Xoroshiro128Plus rng, PickupDropTable dropTable)
         {
-            Log.LogInfo("Creating choice from basic drop table");
-
             CreatePickupInfo pickupInfo = new CreatePickupInfo
             {
                 position = position,
@@ -293,12 +291,17 @@ namespace ArtifactOfPotential
                 pickup = pickup
             };
 
+            if (dropTable is not BasicPickupDropTable)
+                return pickupInfo;
+
+            Log.LogInfo("Creating choice from basic drop table");
+
             int tier = GetTier(pickup);
             List<UniquePickup> choices = new List<UniquePickup>() { pickup };
             int num = 0;
             if ((Settings.AnyTierMode.Value && tier <= 6) || (Settings.AnyTierModeVoid.Value && tier >= 7)) //Any Tier Mode or Any Tier Mode Viod is true
             {
-                WeightedSelection<UniquePickup> selection = ((BasicPickupDropTable)dropTable).GetFieldValue<WeightedSelection<UniquePickup>>("selector");
+                WeightedSelection<UniquePickup> selection = (dropTable as BasicPickupDropTable).selector;
                 for (int i = 0; i < selection.Count; i++)
                 {
                     if (selection.GetChoice(i).value.pickupIndex == pickup.pickupIndex)
@@ -328,7 +331,7 @@ namespace ArtifactOfPotential
             else //is not lunar tier
             {
                 dropTable.canDropBeReplaced = false;
-                WeightedSelection<UniquePickup> selection = ((BasicPickupDropTable)dropTable).GetFieldValue<WeightedSelection<UniquePickup>>("selector");
+                WeightedSelection<UniquePickup> selection = (dropTable as BasicPickupDropTable).selector;
                 for (int i = 0; i < selection.Count; i++)
                 {
                     if (GetTier(selection.GetChoice(i).value) != tier || selection.GetChoice(i).value.pickupIndex == pickup.pickupIndex)
@@ -413,7 +416,7 @@ namespace ArtifactOfPotential
             int num = 0;
 
             //Using the Any Tier Mode logic
-            WeightedSelection<UniquePickup> selection = ((DoppelgangerDropTable)dropTable).GetFieldValue<WeightedSelection<UniquePickup>>("selector");
+            WeightedSelection<UniquePickup> selection = (dropTable as DoppelgangerDropTable).selector;
             for (int i = 0; i < selection.Count; i++)
             {
                 if (selection.GetChoice(i).value.pickupIndex == pickup.pickupIndex)
