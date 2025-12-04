@@ -60,6 +60,7 @@ namespace ArtifactOfPotential
             Settings.BossAffected = Config.Bind<bool>("Item Sources Affected", "Boss", true, "Whether or not bosses should drop void potentials. This includes: the teleporter event, Alloy Worship Unit, Aurelionite, and any other \"boss\" event.");
             Settings.SonorousWhispersAffected = Config.Bind<bool>("Item Sources Affected", "Sonorous Whispers", true, "Whether or not Sonorous Whispers should drop void potentials.");
             Settings.SacrificeAffected = Config.Bind<bool>("Item Sources Affected", "Artifact of Sacrifice", true, "Whether or not Artifact of Sacrifice should drop void potentials.");
+            Settings.TemporaryItemsAffected = Config.Bind<bool>("Item Sources Affected", "Temporary Items", true, "Whether or not temporary items from any source should drop void potentials.");
             Settings.DoppelgangerChoiceCount = Config.Bind<int>("Item Sources Affected", "Artifact of Vengance - Choice Count", 5, "The number of item choices you get when killing a doppelganger from Artifact of Vengeance. Item choices can be any tier, regardless of other settings. Set to 1 to disable void potentials from this artifact.");
 
             Settings.Tier1ChoiceCount = Config.Bind<int>("Number of Options by Tier", "Common Options", 3, "The number of choices you get from common tier void potentials. Set to 1 to disable void potentials for this tier.");
@@ -291,6 +292,9 @@ namespace ArtifactOfPotential
                 pickup = pickup
             };
 
+            if (pickup.isTempItem && !Settings.TemporaryItemsAffected.Value) // Short-circuit choices if not enabled for temporary drops
+                return pickupInfo;
+            
             if (dropTable is not BasicPickupDropTable)
                 return pickupInfo;
 
